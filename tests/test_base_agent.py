@@ -8,7 +8,7 @@ import os
 # Add the src directory to the Python path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
 
-from agents.base_agent import BaseAgent
+from src.agents.base_agent import BaseAgent
 
 class TestBaseAgent(unittest.TestCase):
 
