@@ -5,17 +5,17 @@ import os
 from typing import Dict, Any, Optional, List
 import logging
 from datetime import datetime
+from ..knowledge_base.kb_service import KBService
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class PromptManager:
-    def __init__(self, prompts_file: str = "prompts.json"):
+    def __init__(self, prompts_file: str = "prompts.json", kb_storage_dir: str = "kb_storage"):
         self.prompts_file = prompts_file
         self.prompts = self.load_prompts()
-        # This should be replaced with actual KB service integration
-        self.kb_service = DummyKBService()
+        self.kb_service = KBService(storage_dir=kb_storage_dir)
 
     def load_prompts(self) -> Dict[str, Any]:
         if os.path.exists(self.prompts_file):
@@ -47,6 +47,7 @@ class PromptManager:
         self.version_prompt(prompt_name, agent)
         self.prompts[agent][prompt_name]['current'] = prompt_template
         self.save_prompts()
+        self.save_prompt_as_article(prompt_name, agent, prompt_template)
         logger.info(f"Prompt '{prompt_name}' for agent '{agent}' added/updated.")
 
     def generate_prompt(self, task: str, agent: str, technique: str = "standard", **kwargs) -> str:
@@ -76,16 +77,20 @@ class PromptManager:
         return base_prompt
 
     def enhance_prompt_with_kb(self, prompt: str, kb_query: str) -> str:
-        kb_content = self.kb_service.search_articles(kb_query)
+        kb_articles = self.kb_service.search_articles(kb_query, top_k=3)
+        kb_content = "\n\n".join([f"Title: {article['title']}\n{article['content']}" for article in kb_articles])
         return f"Based on the following information:\n\n{kb_content}\n\n{prompt}"
 
-    def save_prompt_as_article(self, prompt_name: str, agent: str):
-        prompt = self.get_prompt(prompt_name, agent)
-        self.kb_service.create_article(f"Prompt: {prompt_name}\nAgent: {agent}\n\n{prompt}")
+    def save_prompt_as_article(self, prompt_name: str, agent: str, prompt_template: str):
+        title = f"Prompt: {prompt_name} ({agent})"
+        content = f"Agent: {agent}\nPrompt Name: {prompt_name}\n\nTemplate:\n{prompt_template}"
+        self.kb_service.create_article(title, content, "prompt")
 
     def generate_prompt_from_article(self, article_title: str) -> str:
-        article_content = self.kb_service.search_articles(article_title)
-        return f"Based on the following information:\n\n{article_content}\n\nPlease provide a response for: {{query}}"
+        article = self.kb_service.get_article_content(article_title)
+        if article and article['content_type'] == 'prompt':
+            return article['content'].split('\n\nTemplate:\n')[1]
+        return ""
 
     def create_spr_prompt(self, concept: str) -> str:
         return f"""Create a Sparse Priming Representation (SPR) for the following concept:
@@ -122,14 +127,6 @@ class PromptManager:
                 'content': current_prompt
             })
             logger.info(f"Created new version of prompt '{prompt_name}' for agent '{agent}'")
-
-# Dummy KB service for demonstration purposes
-class DummyKBService:
-    def search_articles(self, query: str) -> str:
-        return f"This is a dummy KB article for query: {query}"
-
-    def create_article(self, content: str):
-        logger.info(f"Created dummy KB article with content: {content}")
 
 # Example usage
 if __name__ == "__main__":
@@ -175,7 +172,7 @@ if __name__ == "__main__":
     hmcs_prompt = prompt_manager.create_hmcs_prompt(log_entries)
     print("\nHMCS prompt:", hmcs_prompt)
 
-    # Demonstrating KB integration (with dummy service)
+    # Demonstrating KB integration
     kb_enhanced_prompt = prompt_manager.get_or_generate_prompt(
         "ethical_decision",
         "aspirational",
