@@ -22,7 +22,7 @@ class BaseAgent:
     def chat_completion(self, messages: List[Dict[str, str]], max_tokens: int = 150, temperature: float = 0.7) -> str:
         try:
             response = self.client.chat.completions.create(
-                model="gpt-3.5-turbo",
+                model="gpt-4o",
                 messages=messages,
                 max_tokens=max_tokens,
                 temperature=temperature
